@@ -48,6 +48,7 @@ char ** parse_line(char *input_line) {
 
 int main(int argc, char *argv[]) {
     FILE *input_file = stdin;
+    int batched_mode = 0;
 
     if (argc > 1) {
         /* Error and exit if more than two batch files provided */
@@ -61,13 +62,14 @@ int main(int argc, char *argv[]) {
             print_err();
             exit(0);
         }
+        batched_mode = 1;
     }
 
     char input_line[514];
 
     while (!feof(input_file)) {
         /* Only print prompt when not in batched mode */
-        if (input_file == stdin) {
+        if (!batched_mode) {
             print("myshell> ");
         }
 
@@ -81,14 +83,14 @@ int main(int argc, char *argv[]) {
             print_err();
 
             /* We must print the line, valid or not, in batched mode */
-            if (input_file != stdin) {
+            if (batched_mode) {
                 print(input_line);
                 continue;
             }
         }
 
         /* Print line to stdout if in batched mode */
-        if (input_file != stdin) {
+        if (batched_mode) {
             print(input_line);
         }
 
