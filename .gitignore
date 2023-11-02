@@ -1,3 +1,9 @@
+# Test Files, etc.
+batch-files/
+expected-output/
+test-scripts/
+README-p3
+
 # Prerequisites
 *.d
 
