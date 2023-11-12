@@ -92,6 +92,7 @@ int builtin_command(char **argv) {
 
         char *ret = getcwd(cwd, 513);
         
+        /* check if cwd string is too long */
         if (!ret) {
             print_err();
             return 1;
@@ -102,7 +103,21 @@ int builtin_command(char **argv) {
     }
 
     if (strcmp(argv[0], "cd") == 0) {
-        println("cd!");
+        char *tgt_dir;
+
+        if (argv[1]) {
+            tgt_dir = argv[1];
+        }
+        else {
+            tgt_dir = getenv("HOME");
+        }
+
+        int res = chdir(tgt_dir);
+        if (res) {
+            print_err();
+            return 1;
+        }
+
         return 1;
     }
 
