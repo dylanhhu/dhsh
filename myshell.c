@@ -80,13 +80,15 @@ int main(int argc, char *argv[]) {
         }
 
         if (!validate_line_len(input_line)) {
-            print_err();
+            if (batched_mode) print(input_line);
 
-            /* We must print the line, valid or not, in batched mode */
-            if (batched_mode) {
-                print(input_line);
-                continue;
-            }
+            /* Clear rest of input buffer until next line */
+            do {
+                ret = fgets(input_line, 514, input_file);
+                if (batched_mode) print(input_line);
+            } while (!validate_line_len(input_line));
+
+            print_err();
         }
 
         // Split line by semicolon into commands strings
