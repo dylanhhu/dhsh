@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 #define MAX_ARGS 512
 
@@ -133,12 +135,25 @@ int builtin_command(char **argv) {
 */
 void eval(char **argv) {
     if (!builtin_command(argv)) {
-        println("not builtin :(");
+        int child_pid = fork();
 
-        // Fork and execvp
-        // fork
-            // child: execvp
-            // parent: waitpid
+        if (child_pid < 0) {  // fork() error
+            print_err();
+            return;
+        }
+
+        if (child_pid) {  // parent
+            int status;
+            waitpid(child_pid, &status, 0);
+
+            return;  // TODO: we don't need to check for status here?
+        }
+        else {
+            if (execvp(argv[0], argv)) {
+                print_err();
+                exit(-1);
+            }
+        }
     }
 }
 
