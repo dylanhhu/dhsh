@@ -119,6 +119,11 @@ int builtin_command(char **argv) {
 void eval(char **argv) {
     if (!builtin_command(argv)) {
         println("not builtin :(");
+
+        // Fork and execvp
+        // fork
+            // child: execvp
+            // parent: waitpid
     }
 }
 
@@ -168,43 +173,38 @@ int main(int argc, char *argv[]) {
             print_err();
         }
 
-        // Split line by semicolon into commands strings
-
-        // Loop through command strings
-
-        // Split command by redirection (return redir info in a struct?)
-
-        // Set up redirection
-            // `>+` notes:
-                // use O_WRONLY | O_CREAT | O_EXCL
-                // check for EEXISTS
-                    // write into temp file
-            // `>` notes:
-                // use O_WRONLY | O_CREAT | O_TRUNC or just use creat() :/
-
-        char **args = parse_line(input_line, " \t\n");
-        if (!args) continue;  // no tokens found, just whitespace
-
-        eval(args);
-
-        free(args);
-
-        // Fork and execvp
-            // fork
-                // child: execvp
-                // parent: waitpid
-
-        // Clean up redirections (close files)
-            // if `>+`:
-                // copy existing file into temp file in chunks
-                // use rename(2) to rename temp file to final file (overwrites existing file)
-
         /* Print line to stdout if in batched mode */
         if (batched_mode) {
             print(input_line);
         }
 
-        // do shit
+        /* Split line by semicolon into commands strings */
+        char **commands = parse_line(input_line, ";");
+
+        /* Loop through all commands */
+        for (; *commands; commands++) {
+            // Split command by redirection (return redir info in a struct?)
+
+            // Set up redirection
+                // `>+` notes:
+                    // use O_WRONLY | O_CREAT | O_EXCL
+                    // check for EEXISTS
+                        // write into temp file
+                // `>` notes:
+                    // use O_WRONLY | O_CREAT | O_TRUNC or just use creat() :/
+
+            char **args = parse_line(*commands, " \t\n");
+            if (!args) continue;  // no tokens found, just whitespace
+
+            eval(args);
+
+            free(args);
+
+            // Clean up redirections (close files)
+                // if `>+`:
+                    // copy existing file into temp file in chunks
+                    // use rename(2) to rename temp file to final file (overwrites existing file)
+        }
     }
 
     return 0;
