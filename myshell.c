@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX_ARGS 512
+
 
 /**
  * Prints the error message to `STDOUT` as specified by the project
@@ -25,6 +27,15 @@ void print(char *s) {
 
 
 /**
+ * print() and a line!
+*/
+void println(char *s) {
+    print(s);
+    print("\n");
+}
+
+
+/**
  * Validates the length of a line.
  * 
  * @param line The line to validate
@@ -37,12 +48,78 @@ int validate_line_len(char *line) {
 
 
 /**
- * Parses an input line and returns <something>
+ * Parses an input line using the provided separator string. Returns an array
+ * of string pointers.
  * 
  * @param input_line The line to parse
+ * @param sep Separator string to use
 */
-char ** parse_line(char *input_line) {
-    return NULL;
+char ** parse_line(char *input_line, char *sep) {
+    char *token = strtok(input_line, sep);
+
+    /* No tokens found */
+    if (!token) return NULL;
+
+    char **args = malloc(MAX_ARGS * sizeof(char *));
+    args[0] = token;  // set first token
+
+    int i;
+    /* Get the rest of the tokens */
+    for (i = 1; (token = strtok(NULL, sep)); i++) {
+        args[i] = token;
+    }
+
+    args[i] = NULL;
+
+    return args;
+}
+
+
+/**
+ * If provided with a builtin command, executes the command and returns 1,
+ * otherwise 0.
+ * 
+ * @param argv Array of string arguments
+*/
+int builtin_command(char **argv) {
+    if (strcmp(argv[0], "exit") == 0) {
+        free(argv);
+        exit(0);
+    }
+
+    if (strcmp(argv[0], "pwd") == 0) {
+        char cwd[513];
+
+        char *ret = getcwd(cwd, 513);
+        
+        if (!ret) {
+            print_err();
+            return 1;
+        }
+
+        println(ret);
+        return 1;
+    }
+
+    if (strcmp(argv[0], "cd") == 0) {
+        println("cd!");
+        return 1;
+    }
+
+    return 0;
+}
+
+
+/**
+ * Evaluates a given array of arguments. Requires at minimum one argument in the
+ * array.
+ * 
+ * @param argv Array of string arguments
+*/
+void eval(char **argv) {
+    if (!builtin_command(argv)) {
+        println("not builtin :(");
+    }
 }
 
 
@@ -105,7 +182,12 @@ int main(int argc, char *argv[]) {
             // `>` notes:
                 // use O_WRONLY | O_CREAT | O_TRUNC or just use creat() :/
 
-        // Parse arguments
+        char **args = parse_line(input_line, " \t\n");
+        if (!args) continue;  // no tokens found, just whitespace
+
+        eval(args);
+
+        free(args);
 
         // Fork and execvp
             // fork
