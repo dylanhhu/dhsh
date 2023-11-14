@@ -14,6 +14,7 @@
 typedef struct redir_info {
     int type;  // 0 for regular, 1 for advanced
     int orig_stdout;
+    int redir_file_fd;
     char *filename;
     char *tempfilename;  // NULL when not used, else malloc()'d
 } redir_info_t;
@@ -152,7 +153,7 @@ int do_redirs(char *input_line, redir_info_t *output) {
     int file_fd;
 
     if (output->type == 1) {
-        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_EXCL);
+        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_EXCL, 0664);
 
         if (file_fd == -1) {
             if (errno != EEXIST) return -1;  // Error opening file
@@ -168,13 +169,15 @@ int do_redirs(char *input_line, redir_info_t *output) {
         }
     }
     else {
-        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_TRUNC);
+        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_TRUNC, 0664);
 
         if (file_fd == -1) return -1;  // Error opening file
     }
 
     int dup2_res = dup2(file_fd, STDOUT_FILENO);
     if (dup2_res < 0) return -1;
+
+    output->redir_file_fd = file_fd;
 
     return 0;
 }
@@ -184,10 +187,8 @@ int do_redirs(char *input_line, redir_info_t *output) {
  * Undo the redirections.
 */
 int undo_redirs(redir_info_t *redirs) {
-    int stdout_fd = STDOUT_FILENO;
-
     if (redirs->tempfilename) {
-        int existing_fd = open(redirs->filename, O_RDONLY);
+        int existing_fd = open(redirs->filename, O_RDONLY, 0664);
 
         if (existing_fd == -1) return -1;  // error opening file
 
@@ -196,7 +197,7 @@ int undo_redirs(redir_info_t *redirs) {
 
         /* Copy existing file into new file */
         while ((n_read = read(existing_fd, buf, 1024)) > 0) {
-            write(stdout_fd, buf, n_read);
+            write(STDOUT_FILENO, buf, n_read);
         }
 
         int close_ret = close(existing_fd);
@@ -205,7 +206,7 @@ int undo_redirs(redir_info_t *redirs) {
         int dup2_ret = dup2(redirs->orig_stdout, STDOUT_FILENO);
         if (dup2_ret < 0) return -1;  // error restoring stdout
 
-        close_ret = close(stdout_fd);
+        close_ret = close(redirs->redir_file_fd);
         if (close_ret < 0) return -1;
 
         // rename(2) temp file to final file
@@ -218,7 +219,7 @@ int undo_redirs(redir_info_t *redirs) {
         int dup2_ret = dup2(redirs->orig_stdout, STDOUT_FILENO);
         if (dup2_ret < 0) return -1;
 
-        int close_ret = close(stdout_fd);
+        int close_ret = close(redirs->redir_file_fd);
         if (close_ret < 0) return -1;
     }
 
@@ -351,6 +352,8 @@ int main(int argc, char *argv[]) {
 
             print_err();
         }
+
+        input_line[strcspn(input_line, "\r\n")] = 0;
 
         /* Print line to stdout if in batched mode */
         if (batched_mode) {
