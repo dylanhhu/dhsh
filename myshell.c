@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -6,6 +8,15 @@
 #include <sys/types.h>
 
 #define MAX_ARGS 512
+
+
+/* Contains information about the requested redirect */
+typedef struct redir_info {
+    int type;  // 0 for regular, 1 for advanced
+    int orig_stdout;
+    char *filename;
+    char *tempfilename;  // NULL when not used, else malloc()'d
+} redir_info_t;
 
 
 /**
@@ -74,6 +85,144 @@ char ** parse_line(char *input_line, char *sep) {
     args[i] = NULL;
 
     return args;
+}
+
+
+/**
+ * Counts the number of tokens. Dunno why I need this but whatever.
+ * 
+ * @param tokens Array of tokens
+*/
+int count_tokens(char **tokens) {
+    int count = 0;
+
+    while (*tokens++) count++;
+
+    return count;
+}
+
+
+/**
+ * Parses an input line for any redirections. If redirection is necessary, the
+ * information will be placed in the struct provided.
+ * 
+ * Returns 0 on success, 1 when no redirection is neccessary, -1 on error.
+*/
+int parse_redirs(char *input_line, redir_info_t *output) {
+    char **tokens = parse_line(input_line, ">+");
+
+    int num_tokens = count_tokens(tokens);
+
+    if (num_tokens == 1) return 1;  // no redirection necessary
+
+    /* Either no file specified or too many tokens provided */
+    if (num_tokens < 2 || num_tokens > 4) return -1;  
+
+    if (tokens[1][0] == '+') {
+        if (num_tokens != 3) return -1;
+
+        output->type = 1;
+        output->filename = tokens[2];
+    }
+    else {
+        output->type = 0;
+        output->filename = tokens[1];
+    }
+
+    output->tempfilename = NULL;
+
+    return 0;
+}
+
+
+/**
+ * Does the redirects.
+*/
+int do_redirs(char *input_line, redir_info_t *output) {
+    int res = parse_redirs(input_line, output);
+
+    if (res) return res;  // passthru error / redir not necessary
+
+    /* Duplicate original stdout */
+    output->orig_stdout = dup(STDOUT_FILENO);
+
+    /* Error duplicating stdout */
+    if (output->orig_stdout < 0) return -1;
+
+    int file_fd;
+
+    if (output->type == 1) {
+        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_EXCL);
+
+        if (file_fd == -1) {
+            if (errno != EEXIST) return -1;  // Error opening file
+
+            char *temp_filename = malloc(strlen(output->filename) + 11);
+            char *temp_filename_end = strcpy(temp_filename, output->filename);
+            strcpy(temp_filename_end, "tempredir");
+
+            file_fd = open(temp_filename, O_WRONLY | O_CREAT | O_TRUNC);
+            if (file_fd == -1) return -1;
+
+            output->tempfilename = temp_filename;
+        }
+    }
+    else {
+        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_TRUNC);
+
+        if (file_fd == -1) return -1;  // Error opening file
+    }
+
+    int dup2_res = dup2(file_fd, STDOUT_FILENO);
+    if (dup2_res < 0) return -1;
+
+    return 0;
+}
+
+
+/**
+ * Undo the redirections.
+*/
+int undo_redirs(redir_info_t *redirs) {
+    int stdout_fd = STDOUT_FILENO;
+
+    if (redirs->tempfilename) {
+        int existing_fd = open(redirs->filename, O_RDONLY);
+
+        if (existing_fd == -1) return -1;  // error opening file
+
+        char buf[1025];
+        int n_read;
+
+        /* Copy existing file into new file */
+        while ((n_read = read(existing_fd, buf, 1024)) > 0) {
+            write(stdout_fd, buf, n_read);
+        }
+
+        int close_ret = close(existing_fd);
+        if (close_ret < 0) return -1;
+
+        int dup2_ret = dup2(redirs->orig_stdout, STDOUT_FILENO);
+        if (dup2_ret < 0) return -1;  // error restoring stdout
+
+        close_ret = close(stdout_fd);
+        if (close_ret < 0) return -1;
+
+        // rename(2) temp file to final file
+        int rename_ret = rename(redirs->tempfilename, redirs->filename);
+        if (rename_ret < 0) return -1;
+
+        free(redirs->tempfilename);
+    }
+    else {
+        int dup2_ret = dup2(redirs->orig_stdout, STDOUT_FILENO);
+        if (dup2_ret < 0) return -1;
+
+        int close_ret = close(stdout_fd);
+        if (close_ret < 0) return -1;
+    }
+
+    return 0;
 }
 
 
@@ -213,15 +362,14 @@ int main(int argc, char *argv[]) {
 
         /* Loop through all commands */
         for (; *commands; commands++) {
-            // Split command by redirection (return redir info in a struct?)
+            redir_info_t redir;
+            int redir_res = do_redirs(*commands, &redir);
 
-            // Set up redirection
-                // `>+` notes:
-                    // use O_WRONLY | O_CREAT | O_EXCL
-                    // check for EEXISTS
-                        // write into temp file
-                // `>` notes:
-                    // use O_WRONLY | O_CREAT | O_TRUNC or just use creat() :/
+            /* Redirection error */
+            if (redir_res == -1) {
+                print_err();
+                continue;
+            }
 
             char **args = parse_line(*commands, " \t\n");
             if (!args) continue;  // no tokens found, just whitespace
@@ -230,10 +378,11 @@ int main(int argc, char *argv[]) {
 
             free(args);
 
-            // Clean up redirections (close files)
-                // if `>+`:
-                    // copy existing file into temp file in chunks
-                    // use rename(2) to rename temp file to final file (overwrites existing file)
+            if (!redir_res) {
+                redir_res = undo_redirs(&redir);
+
+                if (redir_res) print_err();
+            }
         }
     }
 
