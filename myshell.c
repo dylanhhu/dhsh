@@ -404,6 +404,7 @@ int main(int argc, char *argv[]) {
             } while (!validate_line_len(input_line));
 
             print_err();
+            continue;
         }
 
         input_line[strcspn(input_line, "\r\n")] = 0;
