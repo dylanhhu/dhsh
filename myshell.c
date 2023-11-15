@@ -110,27 +110,33 @@ int count_tokens(char **tokens) {
  * Returns 0 on success, 1 when no redirection is neccessary, -1 on error.
 */
 int parse_redirs(char *input_line, redir_info_t *output) {
-    char **tokens = parse_line(input_line, ">+");
+    char **tokens = parse_line(input_line, ">");
 
     int num_tokens = count_tokens(tokens);
 
     if (num_tokens == 1) return 1;  // no redirection necessary
 
-    /* Either no file specified or too many tokens provided */
-    if (num_tokens < 2 || num_tokens > 4) return -1;  
+    /* Check only one redirection operator */
+    if (num_tokens != 2) return -1;
 
+    /* Check for advanced redirection */
     if (tokens[1][0] == '+') {
-        if (num_tokens != 3) return -1;
-
+        tokens[1]++;
         output->type = 1;
-        output->filename = tokens[2];
     }
-    else {
-        output->type = 0;
-        output->filename = tokens[1];
-    }
+    else output->type = 0;
 
+    char **filename_toks = parse_line(tokens[1], " \t\n");
+    if (!filename_toks) return -1;  // no file specified
+
+    num_tokens = count_tokens(filename_toks);
+    if (num_tokens != 1) return -1;  // too many tokens
+
+    output->filename = filename_toks[0];
     output->tempfilename = NULL;
+
+    free(filename_toks);
+    free(tokens);
 
     return 0;
 }
@@ -162,7 +168,7 @@ int do_redirs(char *input_line, redir_info_t *output) {
             char *temp_filename_end = strcpy(temp_filename, output->filename);
             strcpy(temp_filename_end, "tempredir");
 
-            file_fd = open(temp_filename, O_WRONLY | O_CREAT | O_TRUNC);
+            file_fd = open(temp_filename, O_WRONLY | O_CREAT | O_TRUNC, 0664);
             if (file_fd == -1) return -1;
 
             output->tempfilename = temp_filename;
@@ -364,9 +370,9 @@ int main(int argc, char *argv[]) {
         char **commands = parse_line(input_line, ";");
 
         /* Loop through all commands */
-        for (; *commands; commands++) {
+        for (char **command = commands; *command; command++) {
             redir_info_t redir;
-            int redir_res = do_redirs(*commands, &redir);
+            int redir_res = do_redirs(*command, &redir);
 
             /* Redirection error */
             if (redir_res == -1) {
@@ -374,7 +380,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            char **args = parse_line(*commands, " \t\n");
+            char **args = parse_line(*command, " \t\n");
             if (!args) continue;  // no tokens found, just whitespace
 
             eval(args);
@@ -387,6 +393,8 @@ int main(int argc, char *argv[]) {
                 if (redir_res) print_err();
             }
         }
+
+        free(commands);
     }
 
     return 0;
