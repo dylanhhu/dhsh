@@ -125,7 +125,10 @@ int count_tokens(char **tokens) {
  * Returns 0 on success, 1 when no redirection is neccessary, -1 on error.
 */
 int parse_redirs(char *input_line, redir_info_t *output) {
-    if (!strchr(input_line, '>')) return 1;  // no redirection necessary
+    char *last_loc = strrchr(input_line, '>');
+
+    if (!last_loc) return 1;  // no redirection necessary
+    if (last_loc == (input_line + strlen(input_line) - 1)) return -1;
 
     char **tokens = parse_line(input_line, ">");
     if (!tokens) return -1;
