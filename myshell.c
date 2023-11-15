@@ -145,11 +145,7 @@ int parse_redirs(char *input_line, redir_info_t *output) {
 /**
  * Does the redirects.
 */
-int do_redirs(char *input_line, redir_info_t *output) {
-    int res = parse_redirs(input_line, output);
-
-    if (res) return res;  // passthru error / redir not necessary
-
+int do_redirs(redir_info_t *output) {
     /* Duplicate original stdout */
     output->orig_stdout = dup(STDOUT_FILENO);
 
@@ -228,6 +224,18 @@ int undo_redirs(redir_info_t *redirs) {
         int close_ret = close(redirs->redir_file_fd);
         if (close_ret < 0) return -1;
     }
+
+    return 0;
+}
+
+
+/**
+ * Checks whether the command provided is builtin. If it is, returns 1 else 0.
+*/
+int is_builtin(char **argv) {
+    if (!strcmp(argv[0], "exit")) return 1;
+    if (!strcmp(argv[0], "pwd")) return 1;
+    if (!strcmp(argv[0], "cd")) return 1;
 
     return 0;
 }
@@ -363,17 +371,19 @@ int main(int argc, char *argv[]) {
 
         /* Print line to stdout if in batched mode */
         if (batched_mode) {
-            print(input_line);
+            println(input_line);
         }
 
         /* Split line by semicolon into commands strings */
         char **commands = parse_line(input_line, ";");
 
+        if (!commands) continue;  // blank line
+
         /* Loop through all commands */
         for (char **command = commands; *command; command++) {
             redir_info_t redir;
-            int redir_res = do_redirs(*command, &redir);
-
+            int redir_res = parse_redirs(*command, &redir);
+            
             /* Redirection error */
             if (redir_res == -1) {
                 print_err();
@@ -383,8 +393,24 @@ int main(int argc, char *argv[]) {
             char **args = parse_line(*command, " \t\n");
             if (!args) continue;  // no tokens found, just whitespace
 
-            eval(args);
+            /* Handle redirections */
+            if (!redir_res) {
+                /* Check if trying to redirect builtins */
+                if (is_builtin(args)) {
+                    print_err();
+                    continue;
+                }
 
+                redir_res = do_redirs(&redir);
+
+                /* Redirection error */
+                if (redir_res == -1) {
+                    print_err();
+                    continue;
+                }
+            }
+
+            eval(args);
             free(args);
 
             if (!redir_res) {
