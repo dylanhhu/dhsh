@@ -292,8 +292,8 @@ int builtin_command(char **argv) {
     }
 
     if (strcmp(argv[0], "cd") == 0) {
-        /* cd should have exactly one argument */
-        if (argc != 2) {
+        /* cd should have at most one argument */
+        if (argc > 2) {
             print_err();
             return 1;
         }
