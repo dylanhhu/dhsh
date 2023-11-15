@@ -125,13 +125,14 @@ int count_tokens(char **tokens) {
  * Returns 0 on success, 1 when no redirection is neccessary, -1 on error.
 */
 int parse_redirs(char *input_line, redir_info_t *output) {
+    if (!strchr(input_line, '>')) return 1;  // no redirection necessary
+
     char **tokens = parse_line(input_line, ">");
+    if (!tokens) return -1;
 
     int num_tokens = count_tokens(tokens);
 
-    if (num_tokens == 1) return 1;  // no redirection necessary
-
-    /* Check only one redirection operator */
+    /* Check formatting validity */
     if (num_tokens != 2) return -1;
 
     /* Check for advanced redirection */
@@ -263,12 +264,18 @@ int is_builtin(char **argv) {
  * @param argv Array of string arguments
 */
 int builtin_command(char **argv) {
+    int argc = count_tokens(argv);
+
     if (strcmp(argv[0], "exit") == 0) {
+        /* exit should have no arguments */
+        if (argc > 1) {
+            print_err();
+            return 1;
+        }
+
         free(argv);
         exit(0);
     }
-
-    int argc = count_tokens(argv);
 
     if (strcmp(argv[0], "pwd") == 0) {
         /* pwd should have no arguments */
