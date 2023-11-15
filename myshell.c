@@ -389,10 +389,7 @@ int main(int argc, char *argv[]) {
         }
 
         char *ret = fgets(input_line, 514, input_file);  // Read next input line
-        if (ret == NULL) {
-            print_err();
-            exit(0);  // TODO: Verify
-        }
+        if (ret == NULL) exit(0);  // at EOF so just exit
 
         if (!validate_line_len(input_line)) {
             if (batched_mode) print(input_line);
