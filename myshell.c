@@ -187,9 +187,9 @@ int do_redirs(redir_info_t *output) {
         }
     }
     else {
-        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+        file_fd = open(output->filename, O_WRONLY | O_CREAT | O_EXCL, 0664);
 
-        if (file_fd == -1) return -1;  // Error opening file
+        if (file_fd == -1) return -1;  // Error opening file or file exists
     }
 
     int dup2_res = dup2(file_fd, STDOUT_FILENO);
