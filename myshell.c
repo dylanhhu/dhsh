@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -46,6 +47,20 @@ void print(char *s) {
 void println(char *s) {
     print(s);
     print("\n");
+}
+
+
+/**
+ * Determines if the provided line is blank (blank includes only containing
+ * whitespace).
+*/
+int is_blank_line(char *line) {
+    while (*line) {
+        if (!isspace(*line)) return 0;
+        line++;
+    }
+
+    return 1;
 }
 
 
@@ -253,7 +268,15 @@ int builtin_command(char **argv) {
         exit(0);
     }
 
+    int argc = count_tokens(argv);
+
     if (strcmp(argv[0], "pwd") == 0) {
+        /* pwd should have no arguments */
+        if (argc > 1) {
+            print_err();
+            return 1;
+        }
+
         char cwd[513];
 
         char *ret = getcwd(cwd, 513);
@@ -269,6 +292,12 @@ int builtin_command(char **argv) {
     }
 
     if (strcmp(argv[0], "cd") == 0) {
+        /* cd should have exactly one argument */
+        if (argc != 2) {
+            print_err();
+            return 1;
+        }
+
         char *tgt_dir;
 
         if (argv[1]) {
@@ -369,8 +398,8 @@ int main(int argc, char *argv[]) {
 
         input_line[strcspn(input_line, "\r\n")] = 0;
 
-        /* Print line to stdout if in batched mode */
-        if (batched_mode) {
+        /* Print line to stdout if in batched mode and not blank */
+        if (batched_mode && !is_blank_line(input_line)) {
             println(input_line);
         }
 
